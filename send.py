@@ -2,12 +2,12 @@
 import socket
 from time import sleep
 from astm.constants import ENQ, STX, ETX, EOT, ACK, LF, NAK
-import sys
+import sys, os
 
 f = open(sys.argv[1] if len(sys.argv) > 1 else 'out.dat.4', 'rb')
 
 s = socket.socket()
-s.connect(('localhost', 15200))
+s.connect(('localhost', int(os.environ["PORT"] if 'PORT' in os.environ else 15200)))
 
 frame = b''
 
