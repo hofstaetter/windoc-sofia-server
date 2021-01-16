@@ -10,7 +10,7 @@ import re
 import astm
 import sofia
 import pyodbc
-import klein_tools
+import windoc_interface.klein_tools as klein_tools
 
 import config
 

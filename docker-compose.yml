@@ -1,0 +1,16 @@
+version: "3.8"
+
+services:
+
+        sofia-server:
+                build: ./
+                image: sofia-server
+                container_name: sofia-server
+                hostname: sofia-server
+                restart: always
+                env_file:
+                        - .env
+                volumes:
+                        - ./app:/app
+                ports:
+                        - "1245:1245"
