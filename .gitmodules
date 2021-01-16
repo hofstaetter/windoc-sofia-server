@@ -1,0 +1,3 @@
+[submodule "app/windoc_interface"]
+	path = app/windoc_interface
+	url = git@github.com:hofstaetter/windoc-interface.git
