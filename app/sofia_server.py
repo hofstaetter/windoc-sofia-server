@@ -99,6 +99,9 @@ class Dispatcher(astm.server.BaseRecordsDispatcher):
         c = _db.cursor()
 
         self.log.info("Processing result set")
+
+        kartei_entries = []
+        labor_entries = []
         for res in self.results:
             rdatum = res.completed_at.strftime("%Y%m%d")
 
@@ -128,7 +131,6 @@ class Dispatcher(astm.server.BaseRecordsDispatcher):
 
                 clock = res.completed_at
                 eintr = klein_tools.Kassenkartei.leistung(datum=rdatum, pos=pos, cnt=1, kasse=ktab.num, clock=clock)
-                notiz_eintr = clock.strftime("%H:%M") + " Automatische Eintragung durch Sofia Gerät erfolgreich"
 
                 c.execute("SELECT Count(*) FROM Kassenkartei WHERE Intern = ? AND Datum = ? AND Eintragung = ?", self.current_patient.Intern, rdatum, eintr)
                 rr = c.fetchone()
@@ -141,6 +143,7 @@ class Dispatcher(astm.server.BaseRecordsDispatcher):
             else:
                 c.execute("INSERT INTO Labor (Intern, Datum, Gruppe, Kurzbezeichnung, Wert) VALUES (?,?,?,?,?)", self.current_patient.Intern, rdatum, labor.group, labor.lab, res.value)
                 self.log.info("INSERT INTO Labor: Intern='%s' Datum='%s' Kurz='%s' Wert='%s'", self.current_patient.Intern, rdatum, labor.lab, res.value)
+                labor_entries.append((res.completed_at, labor.lab, res.value))
 
             if skip_service:
                 if self.private:
@@ -150,12 +153,23 @@ class Dispatcher(astm.server.BaseRecordsDispatcher):
             else:
                 c.execute("INSERT INTO Kassenkartei (Intern, Datum, Kennung, Arzt, Eintragung) VALUES (?,?,?,?,?)", self.current_patient.Intern, rdatum, 'L', 'XX', eintr)
                 self.log.info("INSERT INTO Kassenkartei: Intern='%s' Datum='%s' Kennung='%s', Eintrag='%s'", self.current_patient.Intern, rdatum, 'L', eintr)
-                c.execute("INSERT INTO Kassenkartei (Intern, Datum, Kennung, Arzt, Eintragung) VALUES (?,?,?,?,?)", self.current_patient.Intern, rdatum, 'T', 'XX', notiz_eintr)
-                self.log.info("INSERT INTO Kassenkartei: Intern='%s' Datum='%s' Kennung='%s', Eintrag='%s'", self.current_patient.Intern, rdatum, 'T', notiz_eintr)
+                kartei_entries.append((res.completed_at, pos))
 
             c.commit()
             self.log.info("Record committed")
 
+
+        if len(labor_entries) > 0:
+            notiz_eintr = "Auto-Sofia: Labor: %s (vom: %s)" % (','.join(e[1] for e in labor_entries), labor_entries[0][0].strftime("%d.%m.%Y %H:%M"))
+            c.execute("INSERT INTO Kassenkartei (Intern, Datum, Kennung, Arzt, Eintragung) VALUES (?,?,?,?,?)", self.current_patient.Intern, datum, 'T', 'XX', notiz_eintr)
+            c.commit()
+            self.log.info("INSERT INTO Kassenkartei: Intern='%s' Datum='%s' Kennung='%s', Eintrag='%s'", self.current_patient.Intern, datum, 'T', notiz_eintr)
+
+        if len(kartei_entries) > 0:
+            notiz_eintr = "Auto-Sofia: Leistungen: %s (vom: %s)" % (','.join(e[1] for e in kartei_entries), kartei_entries[0][0].strftime("%d.%m.%Y %H:%M"))
+            c.execute("INSERT INTO Kassenkartei (Intern, Datum, Kennung, Arzt, Eintragung) VALUES (?,?,?,?,?)", self.current_patient.Intern, datum, 'T', 'XX', notiz_eintr)
+            c.commit()
+            self.log.info("INSERT INTO Kassenkartei: Intern='%s' Datum='%s' Kennung='%s', Eintrag='%s'", self.current_patient.Intern, datum, 'T', notiz_eintr)
         c.close()
 
         self.state = 'start'
