@@ -6,6 +6,7 @@ logging.basicConfig(format="[%(asctime)s] (%(name)s) %(levelname)s: %(message)s"
 import datetime
 import random
 import re
+import os
 
 import astm
 import sofia
@@ -20,7 +21,7 @@ from astm.constants import EOT, STX, NAK
 _log = logging.getLogger('Dispatcher')
 _log.setLevel('INFO')
 
-_db = pyodbc.connect("Driver={Pervasive ODBC Interface};DBQ=DOC;ServerName=10.238.80.100:1583")
+_db = pyodbc.connect(os.environ['WINDOC_DSN'])
 klein_tools.init(_db)
 
 _log.info("Hello World")
