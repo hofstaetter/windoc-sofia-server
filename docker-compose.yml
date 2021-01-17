@@ -2,11 +2,11 @@ version: "3.8"
 
 services:
 
-        sofia-server:
+        windoc-sofia-server:
                 build: ./
-                image: sofia-server
-                container_name: sofia-server
-                hostname: sofia-server
+                image: windoc-sofia-server
+                container_name: windoc-sofia-server
+                hostname: windoc-sofia-server
                 restart: always
                 env_file:
                         - .env
