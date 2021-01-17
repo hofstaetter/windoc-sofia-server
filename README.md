@@ -1,5 +1,5 @@
 
-# sofia-server
+# windoc-sofia-server
 
 Ein Server der die LIS requests des Sofia Geräts entgegen nehmen kann und im Windoc einträgt.
 
