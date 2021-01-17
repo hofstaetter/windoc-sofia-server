@@ -7,7 +7,7 @@ import sys, os
 f = open(sys.argv[1] if len(sys.argv) > 1 else 'out.dat.4', 'rb')
 
 s = socket.socket()
-s.connect(('localhost', int(os.environ["PORT"] if 'PORT' in os.environ else 15200)))
+s.connect(('localhost', int(os.environ["PORT"] if 'PORT' in os.environ else 1245)))
 
 frame = b''
 
