@@ -29,7 +29,8 @@ class Dispatcher(astm.server.BaseRecordsDispatcher):
 
     def __init__(self, *args, **kwargs):
         super(Dispatcher, self).__init__(*args, **kwargs)
-        self.log = _log.getChild(hex(random.randint(0, 16**8))[2:])
+        self.identifier = hex(random.randint(0, 16**8))[2:]
+        self.log = _log.getChild(self.identifier)
         self.log.info("Created Dispatcher instance")
         self.wrappers = sofia.WRAPPER_DICT
         self.state = 'start'
@@ -121,23 +122,31 @@ class Dispatcher(astm.server.BaseRecordsDispatcher):
             if self.private:
                 skip_service = True
 
-            if not skip_service:
-                ktab = self.current_patient.kassen_ref()
-                if res.test.analyte_name == 'SARS' and klein_tools.guess_if_positive(res.value):
-                    self.log.info("Detected positive SARS test, overriding Posnummer='COVT1'")
-                    pos = 'COVT1'
-                else:
-                    pos = ktab.position_from_service(labor.service).strip()
+            try:
+                if not skip_service:
+                    ktab = self.current_patient.kassen_ref()
+                    if res.test.analyte_name == 'SARS' and klein_tools.guess_if_positive(res.value):
+                        self.log.info("Detected positive SARS test, overriding Posnummer='COVT1'")
+                        pos = 'COVT1'
+                    else:
+                        pos = ktab.position_from_service(labor.service).strip()
 
-                clock = res.completed_at
-                eintr = klein_tools.Kassenkartei.leistung(datum=rdatum, pos=pos, cnt=1, kasse=ktab.num, clock=clock)
+                    clock = res.completed_at
+                    eintr = klein_tools.Kassenkartei.leistung(datum=rdatum, pos=pos, cnt=1, kasse=ktab.num, clock=clock)
 
-                c.execute("SELECT Count(*) FROM Kassenkartei WHERE Intern = ? AND Datum = ? AND Eintragung = ?", self.current_patient.Intern, rdatum, eintr)
-                rr = c.fetchone()
-                if rr[0] > 0:
-                    self.log.warning("Duplicate: Intern='%s' Datum='%s' Eintrag='%s' ignored", self.current_patient.Intern, rdatum, eintr)
-                    skip_service = True
-                    skip_labor = True
+                    c.execute("SELECT Count(*) FROM Kassenkartei WHERE Intern = ? AND Datum = ? AND Eintragung = ?", self.current_patient.Intern, rdatum, eintr)
+                    rr = c.fetchone()
+                    if rr[0] > 0:
+                        self.log.warning("Duplicate: Intern='%s' Datum='%s' Eintrag='%s' ignored", self.current_patient.Intern, rdatum, eintr)
+                        skip_service = True
+                        skip_labor = True
+            except Exception as ex:
+                self.log.warning("Could not create Kassenkartei entry: " + repr(ex))
+                msg = "Auto-Sofia: Fehler beim Eintragen einer Leistung (Fehler-Code: %s)" % self.identifier
+                c.execute("INSERT INTO Kassenkartei (Intern, Datum, Kennung, Arzt, Eintragung) VALUES (?,?,?,?,?)", self.current_patient.Intern, datum, 'T', 'XX', msg)
+                c.commit()
+                self.log.info("INSERT INTO Kassenkartei: Intern='%s' Datum='%s' Kennung='%s' Eintragung='%s'", self.current_patient.Intern, datum, 'T', msg)
+
             if skip_labor:
                 self.log.info("Not creating Labor entry")
             else:
