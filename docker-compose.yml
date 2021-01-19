@@ -10,5 +10,7 @@ services:
                 restart: always
                 env_file:
                         - .env
+                volumes:
+                        - ./data:/data
                 ports:
                         - "1245:1245"

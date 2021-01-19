@@ -16,7 +16,7 @@ import windoc_interface.klein_tools as klein_tools
 import config
 
 from astm.omnilab.server import RecordsDispatcher
-from astm.constants import EOT, STX, NAK
+from astm.constants import ENQ, EOT, STX, NAK, ACK
 
 _log = logging.getLogger('Dispatcher')
 _log.setLevel('INFO')
@@ -25,6 +25,43 @@ _db = pyodbc.connect(os.environ['WINDOC_DSN'])
 klein_tools.init(_db)
 
 _log.info("Hello World")
+
+class RequestHandler(astm.server.RequestHandler):
+
+    def __init__(self, *args, **kwargs):
+        super(RequestHandler, self).__init__(*args, **kwargs)
+
+        self.log = logging.getLogger('RequestHandler.' + self.dispatcher.identifier)
+        self.log.setLevel('INFO')
+
+        if os.path.exists('/data'):
+            self.dump = open('/data/' + self.dispatcher.identifier, 'wb')
+        else:
+            self.dump = open('/dev/null', 'wb')
+
+        self.dispatcher.dump = self.dump
+        self.log.info("Ready")
+
+    def on_enq(self):
+        self.dump.write(("%s %s\n" % (datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f"), repr(ENQ))).encode('UTF-8'))
+        return super().on_enq()
+
+    def on_ack(self):
+        self.dump.write(("%s %s\n" % (datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f"), repr(ACK))).encode('UTF-8'))
+        return super().on_ack()
+
+    def on_nak(self):
+        self.dump.write(("%s %s\n" % (datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f"), repr(NAK))).encode('UTF-8'))
+        return super().on_nak()
+
+    def on_eot(self):
+        self.dump.write(("%s %s\n" % (datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f"), repr(EOT))).encode('UTF-8'))
+        return super().on_eot()
+
+    def close(self):
+        self.dump.close()
+        return super().close()
+
 class Dispatcher(astm.server.BaseRecordsDispatcher):
 
     def __init__(self, *args, **kwargs):
@@ -34,6 +71,10 @@ class Dispatcher(astm.server.BaseRecordsDispatcher):
         self.log.info("Created Dispatcher instance")
         self.wrappers = sofia.WRAPPER_DICT
         self.state = 'start'
+
+    def __call__(self, msg):
+        self.dump.write(("%s %s\n" % (datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f"), repr(msg))).encode('UTF-8'))
+        return super().__call__(msg)
 
     def on_header(self, record):
         assert self.state == 'start', "unexpected 'H' record"
@@ -186,5 +227,5 @@ class Dispatcher(astm.server.BaseRecordsDispatcher):
 
         self.state = 'start'
 
-s = astm.server.Server(dispatcher=Dispatcher, host='0.0.0.0', port=1245)
+s = astm.server.Server(dispatcher=Dispatcher, host='0.0.0.0', port=1245, request=RequestHandler)
 s.serve_forever()
