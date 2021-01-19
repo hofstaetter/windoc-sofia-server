@@ -146,6 +146,7 @@ class Dispatcher(astm.server.BaseRecordsDispatcher):
                 c.execute("INSERT INTO Kassenkartei (Intern, Datum, Kennung, Arzt, Eintragung) VALUES (?,?,?,?,?)", self.current_patient.Intern, datum, 'T', 'XX', msg)
                 c.commit()
                 self.log.info("INSERT INTO Kassenkartei: Intern='%s' Datum='%s' Kennung='%s' Eintragung='%s'", self.current_patient.Intern, datum, 'T', msg)
+                skip_service = True
 
             if skip_labor:
                 self.log.info("Not creating Labor entry")
