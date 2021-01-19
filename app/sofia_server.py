@@ -86,8 +86,10 @@ class Dispatcher(astm.server.BaseRecordsDispatcher):
 
         self.log.info("Result set has entries, checking for calibration")
 
-        if self.results[0].test.analyte_name in [ 'CB CASS', 'POS', 'NEG' ] and not self.current_patient.exists():
-            self.log.warning("Ignoring results that look like calibration, and patient does not exist")
+        if ((self.results[0].test.analyte_name == 'CB CASS' and self.results[0].value == 'passed') or
+                (self.results[0].test.analyte_name == 'POS' and self.results[0].value == 'passed') or
+                (self.results[0].test.analyte_name == 'NEG' and self.results[0].value == 'passed')):
+            self.log.info("Ignoring calibration results")
             self.state = 'start'
             return
 
