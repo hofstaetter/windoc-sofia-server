@@ -24,7 +24,7 @@ _log.setLevel('INFO')
 _db = pyodbc.connect(os.environ['WINDOC_DSN'])
 klein_tools.init(_db)
 
-_log.info("Hello World")
+_log.info("Sofia Server successfully started. Listening for incoming connections ... ")
 
 class RequestHandler(astm.server.RequestHandler):
 
