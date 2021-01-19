@@ -10,7 +10,5 @@ services:
                 restart: always
                 env_file:
                         - .env
-                volumes:
-                        - ./app:/app
                 ports:
                         - "1245:1245"
