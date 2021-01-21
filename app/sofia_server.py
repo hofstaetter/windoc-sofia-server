@@ -188,7 +188,7 @@ class Dispatcher(astm.server.BaseRecordsDispatcher):
                 # msg = "Auto-Sofia: Fehler beim Eintragen einer Leistung (Fehler-Code: %s)" % self.identifier
                 # c.execute("INSERT INTO Kassenkartei (Intern, Datum, Kennung, Arzt, Eintragung) VALUES (?,?,?,?,?)", self.current_patient.Intern, datum, 'T', 'XX', msg)
                 # c.commit()
-                self.log.info("INSERT INTO Kassenkartei: Intern='%s' Datum='%s' Kennung='%s' Eintragung='%s'", self.current_patient.Intern, datum, 'T', msg)
+                # self.log.info("INSERT INTO Kassenkartei: Intern='%s' Datum='%s' Kennung='%s' Eintragung='%s'", self.current_patient.Intern, datum, 'T', msg)
                 skip_service = True
 
             if skip_labor:
