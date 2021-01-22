@@ -12,6 +12,8 @@ import astm
 import sofia
 import pyodbc
 import windoc_interface.klein_tools as klein_tools
+import windoc_interface.klein_tools.db as klein_tools_db
+import windoc_interface.klein_tools.kassenkartei as kassenkartei
 
 import config
 
@@ -21,8 +23,11 @@ from astm.constants import ENQ, EOT, STX, NAK, ACK
 _log = logging.getLogger('Dispatcher')
 _log.setLevel('INFO')
 
-_db = pyodbc.connect(os.environ['WINDOC_DSN'])
-klein_tools.init(_db)
+_pool = klein_tools_db.Pool(os.environ['WINDOC_DSN'])
+
+with _pool.open() as db:
+    c = db.cursor()
+    c.execute('SELECT 1')
 
 _log.info("Sofia Server successfully started. Listening for incoming connections ... ")
 
@@ -68,6 +73,7 @@ class Dispatcher(astm.server.BaseRecordsDispatcher):
         super(Dispatcher, self).__init__(*args, **kwargs)
         self.identifier = hex(random.randint(0, 16**8))[2:]
         self.log = _log.getChild(self.identifier)
+        self._db = _pool.open()
         self.log.info("Created Dispatcher instance")
         self.wrappers = sofia.WRAPPER_DICT
         self.state = 'start'
@@ -89,9 +95,9 @@ class Dispatcher(astm.server.BaseRecordsDispatcher):
     def on_patient(self, record):
         assert self.state == 'ready', "unexpected 'P' record"
 
-        istr = klein_tools.Intern.insanify(re.sub(r'[^0-9]+', '', '0'+record.practice_id))
+        istr = klein_tools.format_intern(re.sub(r'[^0-9]+', '', '0'+record.practice_id))
         self.patient_record = record
-        self.current_patient = klein_tools.Intern(istr)
+        self.current_patient = self._db.Intern(istr)
         self.log.info("Received P record (%s)", istr)
 
         self.state = 'ready_for_order'
@@ -134,98 +140,99 @@ class Dispatcher(astm.server.BaseRecordsDispatcher):
             self.state = 'start'
             return
 
-        self.log.info("Checking if patient exists")
-        assert self.current_patient.exists(), f"patient {self.current_patient.Intern} not found"
+        self.log.info("Opening DB connection")
+        with self._db:
+            self.log.info("Checking if patient exists")
+            assert self.current_patient.exists(), f"patient {self.current_patient.Intern} not found"
 
-        hdatum = self.header.timestamp.strftime("%Y%m%d")
-        datum = datetime.datetime.now().strftime("%Y%m%d")
+            hdatum = self.header.timestamp.strftime("%Y%m%d")
+            datum = datetime.datetime.now().strftime("%Y%m%d")
 
-        c = _db.cursor()
+            c = self._db.cursor()
 
-        self.log.info("Processing result set")
+            self.log.info("Processing result set")
 
-        kartei_entries = []
-        labor_entries = []
-        for res in self.results:
-            rdatum = res.completed_at.strftime("%Y%m%d")
+            kartei_entries = []
+            labor_entries = []
+            for res in self.results:
+                rdatum = res.completed_at.strftime("%Y%m%d")
 
-            if (self.header.timestamp - res.completed_at).total_seconds() > config.ignore_timeout:
-                self.log.warning("Ignoring result from %s", res.completed_at)
-                continue
+                if (self.header.timestamp - res.completed_at).total_seconds() > config.ignore_timeout:
+                    self.log.warning("Ignoring result from %s", res.completed_at)
+                    continue
 
-            labor = klein_tools.LabTemplate(res.test.analyte_name)
+                labor = self._db.LabTemplate(res.test.analyte_name)
 
-            skip_service = False
-            skip_labor = False
+                skip_service = False
+                skip_labor = False
 
-            if not hasattr(labor, 'service'):
-                skip_service = True
-                self.log.info("LabTemplate has no service registered")
+                if not hasattr(labor, 'service'):
+                    skip_service = True
+                    self.log.info("LabTemplate has no service registered")
 
-            if self.private:
-                skip_service = True
-
-            try:
-                if not skip_service:
-                    ktab = self.current_patient.kassen_ref()
-                    if res.test.analyte_name == 'SARS' and klein_tools.guess_if_positive(res.value):
-                        self.log.info("Detected positive SARS test, overriding Posnummer='COVT1'")
-                        pos = 'COVT1'
-                    else:
-                        pos = ktab.position_from_service(labor.service).strip()
-
-                    clock = res.completed_at
-                    eintr = klein_tools.Kassenkartei.leistung(datum=rdatum, pos=pos, cnt=1, kasse=ktab.num, clock=clock)
-
-                    c.execute("SELECT Count(*) FROM Kassenkartei WHERE Intern = ? AND Datum = ? AND Eintragung = ?", self.current_patient.Intern, rdatum, eintr)
-                    rr = c.fetchone()
-                    if rr[0] > 0:
-                        self.log.warning("Duplicate: Intern='%s' Datum='%s' Eintrag='%s' ignored", self.current_patient.Intern, rdatum, eintr)
-                        skip_service = True
-                        skip_labor = True
-            except Exception as ex:
-                self.log.warning("Could not create Kassenkartei entry: " + repr(ex))
-                # msg = "Auto-Sofia: Fehler beim Eintragen einer Leistung (Fehler-Code: %s)" % self.identifier
-                # c.execute("INSERT INTO Kassenkartei (Intern, Datum, Kennung, Arzt, Eintragung) VALUES (?,?,?,?,?)", self.current_patient.Intern, datum, 'T', 'XX', msg)
-                # c.commit()
-                # self.log.info("INSERT INTO Kassenkartei: Intern='%s' Datum='%s' Kennung='%s' Eintragung='%s'", self.current_patient.Intern, datum, 'T', msg)
-                skip_service = True
-
-            if skip_labor:
-                self.log.info("Not creating Labor entry")
-            else:
-                c.execute("INSERT INTO Labor (Intern, Datum, Gruppe, Kurzbezeichnung, Wert) VALUES (?,?,?,?,?)", self.current_patient.Intern, rdatum, labor.group, labor.lab, res.value)
-                self.log.info("INSERT INTO Labor: Intern='%s' Datum='%s' Kurz='%s' Wert='%s'", self.current_patient.Intern, rdatum, labor.lab, res.value)
-                labor_entries.append((res.completed_at, labor.lab, res.value))
-
-            if skip_service:
                 if self.private:
-                    self.log.info("Not creating Kassenkartei entries, is tagged private")
+                    skip_service = True
+
+                try:
+                    if not skip_service:
+                        ktab = self.current_patient.kassen_ref()
+                        if res.test.analyte_name == 'SARS' and klein_tools.guess_if_positive(res.value):
+                            self.log.info("Detected positive SARS test, overriding Posnummer='COVT1'")
+                            pos = 'COVT1'
+                        else:
+                            pos = ktab.position_from_service(labor.service).strip()
+
+                        clock = res.completed_at
+                        eintr = kassenkartei.leistung(datum=rdatum, pos=pos, cnt=1, kasse=ktab.num, clock=clock)
+
+                        c.execute("SELECT Count(*) FROM Kassenkartei WHERE Intern = ? AND Datum = ? AND Eintragung = ?", self.current_patient.Intern, rdatum, eintr)
+                        rr = c.fetchone()
+                        if rr[0] > 0:
+                            self.log.warning("Duplicate: Intern='%s' Datum='%s' Eintrag='%s' ignored", self.current_patient.Intern, rdatum, eintr)
+                            skip_service = True
+                            skip_labor = True
+                except Exception as ex:
+                    self.log.warning("Could not create Kassenkartei entry: " + repr(ex))
+                    # msg = "Auto-Sofia: Fehler beim Eintragen einer Leistung (Fehler-Code: %s)" % self.identifier
+                    # c.execute("INSERT INTO Kassenkartei (Intern, Datum, Kennung, Arzt, Eintragung) VALUES (?,?,?,?,?)", self.current_patient.Intern, datum, 'T', 'XX', msg)
+                    # c.commit()
+                    # self.log.info("INSERT INTO Kassenkartei: Intern='%s' Datum='%s' Kennung='%s' Eintragung='%s'", self.current_patient.Intern, datum, 'T', msg)
+                    skip_service = True
+
+                if skip_labor:
+                    self.log.info("Not creating Labor entry")
                 else:
-                    self.log.info("Not creating Kassenkartei entries")
-            else:
-                c.execute("INSERT INTO Kassenkartei (Intern, Datum, Kennung, Arzt, Eintragung) VALUES (?,?,?,?,?)", self.current_patient.Intern, rdatum, 'L', 'XX', eintr)
-                self.log.info("INSERT INTO Kassenkartei: Intern='%s' Datum='%s' Kennung='%s', Eintrag='%s'", self.current_patient.Intern, rdatum, 'L', eintr)
-                kartei_entries.append((res.completed_at, pos))
+                    c.execute("INSERT INTO Labor (Intern, Datum, Gruppe, Kurzbezeichnung, Wert) VALUES (?,?,?,?,?)", self.current_patient.Intern, rdatum, labor.group, labor.lab, res.value)
+                    self.log.info("INSERT INTO Labor: Intern='%s' Datum='%s' Kurz='%s' Wert='%s'", self.current_patient.Intern, rdatum, labor.lab, res.value)
+                    labor_entries.append((res.completed_at, labor.lab, res.value))
 
-            c.commit()
-            self.log.info("Record committed")
+                if skip_service:
+                    if self.private:
+                        self.log.info("Not creating Kassenkartei entries, is tagged private")
+                    else:
+                        self.log.info("Not creating Kassenkartei entries")
+                else:
+                    c.execute("INSERT INTO Kassenkartei (Intern, Datum, Kennung, Arzt, Eintragung) VALUES (?,?,?,?,?)", self.current_patient.Intern, rdatum, 'L', 'XX', eintr)
+                    self.log.info("INSERT INTO Kassenkartei: Intern='%s' Datum='%s' Kennung='%s', Eintrag='%s'", self.current_patient.Intern, rdatum, 'L', eintr)
+                    kartei_entries.append((res.completed_at, pos))
+
+                c.commit()
+                self.log.info("Record committed")
 
 
-        if len(labor_entries) > 0:
-            notiz_eintr = "Auto-Sofia: Labor: %s (vom: %s)" % (','.join(e[1] for e in labor_entries), labor_entries[0][0].strftime("%d.%m.%Y %H:%M"))
-            c.execute("INSERT INTO Kassenkartei (Intern, Datum, Kennung, Arzt, Eintragung) VALUES (?,?,?,?,?)", self.current_patient.Intern, datum, 'T', 'XX', notiz_eintr)
-            c.commit()
-            self.log.info("INSERT INTO Kassenkartei: Intern='%s' Datum='%s' Kennung='%s', Eintrag='%s'", self.current_patient.Intern, datum, 'T', notiz_eintr)
+            if len(labor_entries) > 0:
+                notiz_eintr = "Auto-Sofia: Labor: %s (vom: %s)" % (','.join(e[1] for e in labor_entries), labor_entries[0][0].strftime("%d.%m.%Y %H:%M"))
+                c.execute("INSERT INTO Kassenkartei (Intern, Datum, Kennung, Arzt, Eintragung) VALUES (?,?,?,?,?)", self.current_patient.Intern, datum, 'T', 'XX', notiz_eintr)
+                c.commit()
+                self.log.info("INSERT INTO Kassenkartei: Intern='%s' Datum='%s' Kennung='%s', Eintrag='%s'", self.current_patient.Intern, datum, 'T', notiz_eintr)
 
-        if len(kartei_entries) > 0:
-            notiz_eintr = "Auto-Sofia: Leistungen: %s (vom: %s)" % (','.join(e[1] for e in kartei_entries), kartei_entries[0][0].strftime("%d.%m.%Y %H:%M"))
-            c.execute("INSERT INTO Kassenkartei (Intern, Datum, Kennung, Arzt, Eintragung) VALUES (?,?,?,?,?)", self.current_patient.Intern, datum, 'T', 'XX', notiz_eintr)
-            c.commit()
-            self.log.info("INSERT INTO Kassenkartei: Intern='%s' Datum='%s' Kennung='%s', Eintrag='%s'", self.current_patient.Intern, datum, 'T', notiz_eintr)
-        c.close()
+            if len(kartei_entries) > 0:
+                notiz_eintr = "Auto-Sofia: Leistungen: %s (vom: %s)" % (','.join(e[1] for e in kartei_entries), kartei_entries[0][0].strftime("%d.%m.%Y %H:%M"))
+                c.execute("INSERT INTO Kassenkartei (Intern, Datum, Kennung, Arzt, Eintragung) VALUES (?,?,?,?,?)", self.current_patient.Intern, datum, 'T', 'XX', notiz_eintr)
+                c.commit()
+                self.log.info("INSERT INTO Kassenkartei: Intern='%s' Datum='%s' Kennung='%s', Eintrag='%s'", self.current_patient.Intern, datum, 'T', notiz_eintr)
 
-        self.state = 'start'
+            self.state = 'start'
 
 s = astm.server.Server(dispatcher=Dispatcher, host='0.0.0.0', port=1245, request=RequestHandler)
 s.serve_forever()
