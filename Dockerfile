@@ -6,8 +6,8 @@ RUN mkdir /data
 VOLUME /data
 
 RUN mkdir /utils
-COPY send.py /utils/
-COPY demo_dump.*.dat /utils/
+ADD examples /utils
+COPY send.py /utils
 
 COPY app/ /app/
 
