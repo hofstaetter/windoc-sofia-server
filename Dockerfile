@@ -1,6 +1,7 @@
 FROM psql-base
 
-RUN pip3 install --no-cache-dir astm
+COPY requirements.txt /
+RUN pip3 install --no-cache-dir -r /requirements.txt
 
 RUN mkdir /data
 VOLUME /data
