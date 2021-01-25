@@ -147,6 +147,7 @@ class Dispatcher(astm.server.BaseRecordsDispatcher):
 
             hdatum = self.header.timestamp.strftime("%Y%m%d")
             datum = datetime.datetime.now().strftime("%Y%m%d")
+            logpre = datetime.datetime.now().strftime('[%H:%M]') + " Sofia"
 
             c = self._db.cursor()
 
@@ -219,15 +220,15 @@ class Dispatcher(astm.server.BaseRecordsDispatcher):
                 c.commit()
                 self.log.info("Record committed")
 
-
-            if len(labor_entries) > 0:
-                notiz_eintr = "Auto-Sofia: Labor: %s (vom: %s)" % (','.join(e[1] for e in labor_entries), labor_entries[0][0].strftime("%d.%m.%Y %H:%M"))
+            
+            if len(labor_entries) > 0:           
+                notiz_eintr = "%s: Labor: %s (vom: %s)" % (logpre, ','.join(e[1] for e in labor_entries), labor_entries[0][0].strftime("%d.%m.%Y %H:%M"))
                 c.execute("INSERT INTO Kassenkartei (Intern, Datum, Kennung, Arzt, Eintragung) VALUES (?,?,?,?,?)", self.current_patient.Intern, datum, 'T', 'XX', notiz_eintr)
                 c.commit()
                 self.log.info("INSERT INTO Kassenkartei: Intern='%s' Datum='%s' Kennung='%s', Eintrag='%s'", self.current_patient.Intern, datum, 'T', notiz_eintr)
 
             if len(kartei_entries) > 0:
-                notiz_eintr = "Auto-Sofia: Leistungen: %s (vom: %s)" % (','.join(e[1] for e in kartei_entries), kartei_entries[0][0].strftime("%d.%m.%Y %H:%M"))
+                notiz_eintr = "%s: Leistung: %s (vom: %s)" % (logpre, ','.join(e[1] for e in kartei_entries), kartei_entries[0][0].strftime("%d.%m.%Y %H:%M"))
                 c.execute("INSERT INTO Kassenkartei (Intern, Datum, Kennung, Arzt, Eintragung) VALUES (?,?,?,?,?)", self.current_patient.Intern, datum, 'T', 'XX', notiz_eintr)
                 c.commit()
                 self.log.info("INSERT INTO Kassenkartei: Intern='%s' Datum='%s' Kennung='%s', Eintrag='%s'", self.current_patient.Intern, datum, 'T', notiz_eintr)
