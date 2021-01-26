@@ -195,7 +195,7 @@ class Dispatcher(astm.server.BaseRecordsDispatcher):
                 except Exception as ex:
                     self.log.warning("Could not create Kassenkartei entry: " + repr(ex))
                     # msg = "Auto-Sofia: Fehler beim Eintragen einer Leistung (Fehler-Code: %s)" % self.identifier
-                    # c.execute("INSERT INTO Kassenkartei (Intern, Datum, Kennung, Arzt, Eintragung) VALUES (?,?,?,?,?)", self.current_patient.Intern, datum, 'T', 'XX', msg)
+                    # c.execute("INSERT INTO Kassenkartei (Intern, Datum, Kennung, Arzt, Eintragung) VALUES (?,?,?,?,?)", self.current_patient.Intern, datum, 'T', '', msg)
                     # c.commit()
                     # self.log.info("INSERT INTO Kassenkartei: Intern='%s' Datum='%s' Kennung='%s' Eintragung='%s'", self.current_patient.Intern, datum, 'T', msg)
                     skip_service = True
@@ -213,7 +213,7 @@ class Dispatcher(astm.server.BaseRecordsDispatcher):
                     else:
                         self.log.info("Not creating Kassenkartei entries")
                 else:
-                    c.execute("INSERT INTO Kassenkartei (Intern, Datum, Kennung, Arzt, Eintragung) VALUES (?,?,?,?,?)", self.current_patient.Intern, rdatum, 'L', 'XX', eintr)
+                    c.execute("INSERT INTO Kassenkartei (Intern, Datum, Kennung, Arzt, Eintragung) VALUES (?,?,?,?,?)", self.current_patient.Intern, rdatum, 'L', '', eintr)
                     self.log.info("INSERT INTO Kassenkartei: Intern='%s' Datum='%s' Kennung='%s', Eintrag='%s'", self.current_patient.Intern, rdatum, 'L', eintr)
                     kartei_entries.append((res.completed_at, pos))
 
@@ -223,13 +223,13 @@ class Dispatcher(astm.server.BaseRecordsDispatcher):
             
             if len(labor_entries) > 0:           
                 notiz_eintr = "%s: Labor: %s (vom: %s)" % (logpre, ','.join(e[1] for e in labor_entries), labor_entries[0][0].strftime("%d.%m.%Y %H:%M"))
-                c.execute("INSERT INTO Kassenkartei (Intern, Datum, Kennung, Arzt, Eintragung) VALUES (?,?,?,?,?)", self.current_patient.Intern, datum, 'T', 'XX', notiz_eintr)
+                c.execute("INSERT INTO Kassenkartei (Intern, Datum, Kennung, Arzt, Eintragung) VALUES (?,?,?,?,?)", self.current_patient.Intern, datum, 'T', '', notiz_eintr)
                 c.commit()
                 self.log.info("INSERT INTO Kassenkartei: Intern='%s' Datum='%s' Kennung='%s', Eintrag='%s'", self.current_patient.Intern, datum, 'T', notiz_eintr)
 
             if len(kartei_entries) > 0:
                 notiz_eintr = "%s: Leistung: %s (vom: %s)" % (logpre, ','.join(e[1] for e in kartei_entries), kartei_entries[0][0].strftime("%d.%m.%Y %H:%M"))
-                c.execute("INSERT INTO Kassenkartei (Intern, Datum, Kennung, Arzt, Eintragung) VALUES (?,?,?,?,?)", self.current_patient.Intern, datum, 'T', 'XX', notiz_eintr)
+                c.execute("INSERT INTO Kassenkartei (Intern, Datum, Kennung, Arzt, Eintragung) VALUES (?,?,?,?,?)", self.current_patient.Intern, datum, 'T', '', notiz_eintr)
                 c.commit()
                 self.log.info("INSERT INTO Kassenkartei: Intern='%s' Datum='%s' Kennung='%s', Eintrag='%s'", self.current_patient.Intern, datum, 'T', notiz_eintr)
 
