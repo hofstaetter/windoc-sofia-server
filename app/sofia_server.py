@@ -222,13 +222,13 @@ class Dispatcher(astm.server.BaseRecordsDispatcher):
 
             
             if len(labor_entries) > 0:           
-                notiz_eintr = "%s: Labor: %s (vom: %s)" % (logpre, ','.join(e[1] for e in labor_entries), labor_entries[0][0].strftime("%d.%m.%Y %H:%M"))
+                notiz_eintr = "%s: Labor %s (vom: %s)" % (logpre, ','.join(e[1] for e in labor_entries), labor_entries[0][0].strftime("%d.%m.%Y %H:%M"))
                 c.execute("INSERT INTO Kassenkartei (Intern, Datum, Kennung, Arzt, Eintragung) VALUES (?,?,?,?,?)", self.current_patient.Intern, datum, 'T', '', notiz_eintr)
                 c.commit()
                 self.log.info("INSERT INTO Kassenkartei: Intern='%s' Datum='%s' Kennung='%s', Eintrag='%s'", self.current_patient.Intern, datum, 'T', notiz_eintr)
 
             if len(kartei_entries) > 0:
-                notiz_eintr = "%s: Leistung: %s (vom: %s)" % (logpre, ','.join(e[1] for e in kartei_entries), kartei_entries[0][0].strftime("%d.%m.%Y %H:%M"))
+                notiz_eintr = "%s: Leistung %s (vom: %s)" % (logpre, ','.join(e[1] for e in kartei_entries), kartei_entries[0][0].strftime("%d.%m.%Y %H:%M"))
                 c.execute("INSERT INTO Kassenkartei (Intern, Datum, Kennung, Arzt, Eintragung) VALUES (?,?,?,?,?)", self.current_patient.Intern, datum, 'T', '', notiz_eintr)
                 c.commit()
                 self.log.info("INSERT INTO Kassenkartei: Intern='%s' Datum='%s' Kennung='%s', Eintrag='%s'", self.current_patient.Intern, datum, 'T', notiz_eintr)
