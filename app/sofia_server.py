@@ -7,6 +7,7 @@ import datetime
 import random
 import re
 import os
+import signal
 
 import astm
 import sofia
@@ -20,10 +21,15 @@ import config
 from astm.omnilab.server import RecordsDispatcher
 from astm.constants import ENQ, EOT, STX, NAK, ACK
 
-_log = logging.getLogger('Dispatcher')
+_log = logging.getLogger()
 _log.setLevel('INFO')
 
 _pool = klein_tools_db.Pool(os.environ['WINDOC_DSN'])
+
+def SIGTERM(*args, **kwargs):
+    _log.info("SIGTERM received, raising SystemExit")
+    raise SystemExit()
+signal.signal(signal.SIGTERM, SIGTERM)
 
 with _pool.open() as db:
     c = db.cursor()
@@ -72,7 +78,7 @@ class Dispatcher(astm.server.BaseRecordsDispatcher):
     def __init__(self, *args, **kwargs):
         super(Dispatcher, self).__init__(*args, **kwargs)
         self.identifier = hex(random.randint(0, 16**8))[2:]
-        self.log = _log.getChild(self.identifier)
+        self.log = logging.getLogger('Dispatcher.' + self.identifier)
         self._db = _pool.open()
         self.log.info("Created Dispatcher instance")
         self.wrappers = sofia.WRAPPER_DICT
