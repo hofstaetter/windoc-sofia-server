@@ -1,5 +1,5 @@
 
-# Sofia COVID-19 Server Integrator für Windoc
+# Sofia COVID-19 Server Integrator für Windoc (python 3)
 
 Ein Server der die LIS requests des Sofia Geräts entgegen nehmen kann und im Windoc einträgt. Der Server wird als Docker Container deployed und horcht standardmäßig auf Port `1245`.
 
