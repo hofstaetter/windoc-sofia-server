@@ -14,15 +14,16 @@ docker und docker-compose (tested on Ubuntu 20.04.1 LTS)
 ## Deployment
 
 ```
-echo "WINDOC_DSN=Driver={Pervasive ODBC Interface};DBQ=DOC;ServerName=10.0.0.1:1583" > .env     # Create Env-File with Windoc connection string
+# Create Env-File with Windoc connection string
+echo "WINDOC_DSN=Driver={Pervasive ODBC Interface};DBQ=DOC;ServerName=10.0.0.1:1583" > .env     
 
+# Build base PSQL image
 git clone https://github.com:hofstaetter/psql-base
+docker build psql-base/ --tag psql-base     
 
-docker build psql-base/ --tag psql-base     # Build base PSQL image
-
+# build the windoc-sofia-server docker container, start the container and start listening on specified port
 git clone --recursive https://github.com:hofstaetter/windoc-sofia-server  # clone recusrive to include all needed submodules
-
-make   # build the windoc-sofia-server docker container, start the container and start listening on specified port
+make   
 ```
 
 ## Files
